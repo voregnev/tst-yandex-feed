@@ -2,7 +2,7 @@
 if(!defined('ABSPATH')) die; // Die if accessed directly
 
 class La_Yandex_Feed_Core {
-	
+
     private $query_cache_key = 'tst_yandex_news_cache';
     private $query_cache_data = NULL;
     private $query_cache_expire = 0;
@@ -16,21 +16,21 @@ class La_Yandex_Feed_Core {
     public static $yandex_turbo_feed_min_limit = 300;
     public static $get_post_cache = null;
     public static $get_post_cache_max_length = 50;
-    
+
 	private static $instance = NULL; //instance store
-		
+
 	private function __construct() {
-		
+
 		/* request */
         add_action('init', array($this,'custom_query_vars') );
         add_action('template_redirect', array($this, 'custom_templates_redirect'));
 		add_action('parse_query', array($this, 'custom_request'), 11 );
 		add_filter( 'status_header', array($this, 'set_empty_feed_20ok_status'), 10, 2 );
-		
+
 		/* cache */
 		add_filter( 'posts_results', array($this, 'cache_post_query'), 10, 2 );
 		add_filter( 'posts_request', array($this, 'cache_pre_query'), 10, 2 );
-				
+
 		/* formatting */
 		add_filter('the_title_rss', array($this, 'full_text_formatting'), 15);
 		add_filter('the_excerpt_rss', array($this, 'full_text_formatting'), 15);
@@ -39,7 +39,7 @@ class La_Yandex_Feed_Core {
 		add_filter('layf_author', array($this, 'full_text_formatting'), 15);
 		add_filter('layf_related_link_text', array($this, 'full_text_formatting'), 15);
 		add_filter('layf_content_feed', array($this, 'full_text_formatting'), 15);
-				
+
 		/* robots txt */
 		add_filter('robots_txt', array($this, 'robots_txt_permission'), 2, 2);
 
@@ -48,31 +48,31 @@ class La_Yandex_Feed_Core {
     }
 
     public function cache_pre_query( $request, $query ){
-    
+
         if(isset($query->query_vars['yandex_feed']) && $query->query_vars['yandex_feed'] == 'news') {
-            
+
             $feed_cache_ttl = (int)get_option('layf_feed_cache_ttl', 0);
-            
+
             if( $feed_cache_ttl ) {
-                
+
                 if ( $this->cache_get() !== NULL ){
                     $request = NULL;
                 }
             }
         }
-    
+
         return $request;
     }
-    
+
     public function cache_post_query( $posts, $query ){
         if(isset($query->query_vars['yandex_feed']) && $query->query_vars['yandex_feed'] == 'news') {
-            
+
             $feed_cache_ttl = (int)get_option('layf_feed_cache_ttl', 0);
-            
+
             if( $feed_cache_ttl ) {
-                
+
                 $cached_posts = $this->cache_get();
-                
+
                 if ( $cached_posts !== NULL ) {
                     $posts = $cached_posts;
                 }
@@ -81,23 +81,23 @@ class La_Yandex_Feed_Core {
                 }
             }
         }
-    
+
         return $posts;
     }
-    
+
     public function cache_get() {
         $key = $this->query_cache_key;
-        
+
         if( $this->query_cache_data === NULL ) {
-            
+
             $data = get_option( $key, NULL );
             $data = maybe_unserialize( $data );
-            
+
             if( $data ) {
-                
+
                 $this->query_cache_data = $data['data'];
                 $this->query_cache_expire = $data['expire'];
-                
+
                 if( time() > $data['expire'] ) {
                     update_option( $key, '' );
                     $this->query_cache_data = NULL;
@@ -108,59 +108,59 @@ class La_Yandex_Feed_Core {
                 $this->query_cache_data = NULL;
             }
         }
-        
+
         return $this->query_cache_data;
     }
-    
+
     public function cache_set( $data, $ttl ) {
         $key = $this->query_cache_key;
         $data = array( 'data' => $data, 'expire' => time() + $ttl );
         update_option( $key, maybe_serialize( $data ) );
     }
-    
+
     public function clear_cache() {
         delete_option($this->query_cache_key);
     }
-	
+
 	public function set_empty_feed_20ok_status($status_header, $header) {
 		global $wp_query;
-		$qv = get_query_var('yandex_feed'); 
+		$qv = get_query_var('yandex_feed');
 		if('news' == $qv){
 			if((int) $header == 404) {
 				return status_header( 200 );
 			}
 		}
-		return $status_header;			
+		return $status_header;
 	}
-	
+
 	/** instance */
     public static function get_instance(){
-        
+
         if (NULL === self :: $instance)
 			self :: $instance = new self;
-					
+
 		return self :: $instance;
-    }       
-	
+    }
+
 	static function on_activation() {
 		/* forse rewrite flush on time */
 		update_option('layf_permalinks_flushed', 0);
 	}
-	
+
 	static function on_deactivation() {
 		/* forse rewrite flush on time */
 		delete_option('layf_permalinks_flushed');
-	}	
-	
+	}
+
 	public function admin_setup(){
-		
+
 		if(!is_admin())
 			return;
-		
+
 		require_once(LAYF_PLUGIN_DIR.'inc/admin.php');
 		La_Yandex_Feed_Admin::get_instance();
-	}	
-	
+	}
+
 	public function get_supported_post_types() {
 		$pt = get_option('layf_post_types', 'post');
 		if(!trim($pt)) {
@@ -168,49 +168,49 @@ class La_Yandex_Feed_Core {
 		}
 		$pt = explode(',', $pt);
 		$pt = array_map('trim', $pt);
-		
+
 		return $pt;
-	}	
-	
-	/** request */	
+	}
+
+	/** request */
 	public function custom_query_vars(){
         global $wp;
-        
+
         $wp->add_query_var('yandex_feed');
 		// default
 		// add_rewrite_rule('^yandex/([^/]*)/?', 'index.php?yandex_feed=$matches[1]', 'top');
 		add_rewrite_rule('^yandex/news/?', 'index.php?yandex_feed=news', 'top');
 		add_rewrite_rule('^yandex/turbo/?', 'index.php?yandex_feed=turbo', 'top');
-		
+
 		//custom
 		$slug = trailingslashit(get_option('layf_custom_url', 'yandex/news')); //var_dump($slug);
-		
+
 		if(!empty($slug) && $slug != '/' && $slug != 'yandex/news/'){
 			add_rewrite_rule("^$slug?", 'index.php?yandex_feed=news', 'top');
 		}
-		
+
 		//custom turbo feed url
 		$slug = trailingslashit(get_option('layf_custom_turbo_url', 'yandex/turbo')); //var_dump($slug);
-		
+
 		if(!empty($slug) && $slug != '/' && $slug != 'yandex/turbo/'){
 		    add_rewrite_rule("^$slug?", 'index.php?yandex_feed=turbo', 'top');
 		}
-		
+
 		if( !get_option('layf_permalinks_flushed') ) {
-			
+
                 flush_rewrite_rules(false);
                 update_option('layf_permalinks_flushed', 1);
-           
+
         }
     }
-	
+
 	public function custom_request($query) {
         // var_dump($query->query_vars); die();
-	    
+
 	    if(isset($query->query_vars['yandex_feed']) && (in_array($query->query_vars['yandex_feed'], array('news', 'turbo')))) {
 	        $is_turbo = $query->query_vars['yandex_feed'] == 'turbo';
 			$pt = $this->get_supported_post_types();
-			
+
 			if(empty($query->query_vars['paged'])) {
 			    $paged = layf_get_url_var( 'page' );
 			    if(!empty($paged)) {
@@ -220,9 +220,9 @@ class La_Yandex_Feed_Core {
 			        }
 			    }
 			}
-			
+
 			$query->query_vars['post_type'] = $pt;
-			
+
 			if($is_turbo) {
 			    $feed_items_limit_option = (int)get_option('layf_feed_items_limit', '');
 			    if($feed_items_limit_option > 0) {
@@ -235,7 +235,7 @@ class La_Yandex_Feed_Core {
 			else {
 			    $query->query_vars['posts_per_page'] = self::$yandex_turbo_feed_min_limit;
 			    $layf_post_max_age = get_option('layf_post_max_age', LAYF_DEFAULT_MAX_POST_AGE);
-                
+
                 $limit = strtotime(sprintf('- %s days', $layf_post_max_age)); //Limited by Yandex rules
                 $query->query_vars['date_query'] = array(
                     array(
@@ -247,24 +247,24 @@ class La_Yandex_Feed_Core {
                     )
                 );
             }
-            
+
 			$query->is_page = false;
 			$query->is_home = false;
-			
+
 			//filtering by category
 			$terms = get_option('layf_filter_terms', '');
 			$terms_slug = get_option('layf_filter_terms_slug', '');
 			if(!empty($terms) || !empty($terms_slug)){
 				$tax = get_option('layf_filter_taxonomy', 'category');
 				$terms = !empty($terms) ? array_map('intval', explode(',', $terms)) : array();
-				
+
 				if(!empty($terms_slug)) {
 				    $terms_slug = explode(',', $terms_slug);
 				    if(count($terms_slug)) {
 				        $terms = array_merge($terms, get_terms(array('taxonomy' => $tax, 'hide_empty' => false, 'slug' => $terms_slug, 'fields' => 'ids')));
 				    }
 				}
-				
+
 				$query->query_vars['tax_query'][] = array(
 					'taxonomy' => $tax,
 					'field' => 'id',
@@ -278,14 +278,14 @@ class La_Yandex_Feed_Core {
 			if(!empty($terms) || !empty($terms_slug)){
 				$tax = get_option('layf_exclude_taxonomy', 'category');
 				$terms = !empty($terms) ? array_map('intval', explode(',', $terms)) : array();
-				
+
 				if(!empty($terms_slug)) {
 				    $terms_slug = explode(',', $terms_slug);
 				    if(count($terms_slug)) {
 				        $terms = array_merge($terms, get_terms(array('taxonomy' => $tax, 'hide_empty' => false, 'slug' => $terms_slug, 'fields' => 'ids')));
 				    }
 				}
-				
+
 				$query->query_vars['tax_query'][] = array(
 					'taxonomy' => $tax,
 					'field' => 'id',
@@ -311,7 +311,7 @@ class La_Yandex_Feed_Core {
 			}
             // var_dump($query->query_vars); die();
 		}
-		
+
 	}
 
 	public function custom_templates_redirect(){
@@ -322,58 +322,58 @@ class La_Yandex_Feed_Core {
 			die();
 		}
 	}
-	
+
 	public function robots_txt_permission($output, $public){
-		
+
 		if($public == 0)
 			return $output;
-		
+
         $dir = "User-agent: Yandex\nAllow: /yandex/news/";
 		$output = $dir.$output;
-		
+
 		return $output;
-	}		
-	
+	}
+
 	/** formatting */
 	function full_text_formatting($text){
-	
+
 		$pattern = '\[(\[?)(embed|wp_caption|caption|gallery|playlist|audio|video)(?![\w-])([^\]\/]*(?:\/(?!\])[^\]\/]*)*?)(?:(\/)\]|\](?:([^\[]*+(?:\[(?!\/\2\])[^\[]*+)*+)\[\/\2\])?)(\]?)';
 		$text = preg_replace_callback( "/$pattern/s", 'strip_shortcode_tag', $text );
-		
+
 		global $wp_query;
-		
+
 		if(empty($wp_query->query_vars['yandex_feed']))
 			return $text;
-		
+
 		$text = wp_strip_all_tags($text);
-		
+
 		//remove multiply spaces
 		$text = preg_replace('/\s\s+/', ' ', $text);
 		$text = preg_replace('/(\r|\n|\r\n){3,}/', '', $text);
-		
-		
-		
+
+
+
 		// return $text;
 		return self::_valid_characters($text);
 	}
-	
+
 	static function _valid_characters($text) {
-		
+
 		$text = htmlentities ($text, ENT_QUOTES, 'UTF-8', false);
 		$ent_table = layf_get_chars_table();
 		$text = strtr($text, $ent_table);
-		
-		
-		
+
+
+
 		return $text;
-	}	
-	
+	}
+
 	/** template helpers */
 	static function get_the_content_feed() {
-	    
+
 		$post = layf_get_post();
 		$content = $post->post_content;
-		
+
 		if(get_option('layf_remove_teaser_from_fulltext', '')) {
 		    if ( preg_match( '/<!--more(.*?)?-->/', $content, $matches ) ) {
 		        $content_parts = explode( $matches[0], $content, 2 );
@@ -383,10 +383,10 @@ class La_Yandex_Feed_Core {
 		    }
 		}
 		$content = str_replace(']]>', ']]&gt;', $content);
-		
+
 		add_filter('img_caption_shortcode', 'layf_filter_image_caption', 20, 3); //filter caption text
 		add_filter( 'layf_content_feed', array( $GLOBALS['wp_embed'], 'autoembed' ), 8 ); //embed media to HTML
-		
+
 		add_filter( 'layf_content_feed', 'wptexturize'        );
 		add_filter( 'layf_content_feed', 'convert_smilies'    );
 		add_filter( 'layf_content_feed', 'convert_chars'      );
@@ -394,20 +394,20 @@ class La_Yandex_Feed_Core {
 		add_filter( 'layf_content_feed', 'shortcode_unautop'  );
 		add_filter( 'layf_content_feed', 'do_shortcode'       );
         add_filter( 'layf_content_feed', array( $GLOBALS['wp_embed'], 'run_shortcode' ), 8 ); //embed media to HTML
-		
+
 		if(get_option('layf_remove_shortcodes', '')) {
 		    add_filter( 'layf_content_feed', 'layf_strip_all_shortcodes'   );
 		}
-        
+
 		$content = preg_replace('/<p>\s*<\/p>/', '', $content );
-        
-		return apply_filters('layf_content_feed', $content);		
+
+		return apply_filters('layf_content_feed', $content);
 	}
-	
+
 	static function get_the_turbo_content() {
 	    $post = layf_get_post();
 	    $content = $post->post_content;
-	    
+
 	    if(get_option('layf_remove_teaser_from_fulltext', '')) {
 	        if ( preg_match( '/<!--more(.*?)?-->/', $content, $matches ) ) {
 	            $content_parts = explode( $matches[0], $content, 2 );
@@ -417,11 +417,11 @@ class La_Yandex_Feed_Core {
 	        }
 	    }
 	    $content = str_replace(']]>', ']]&gt;', $content);
-	    
+
 	    add_filter( 'layf_turbo_content_feed', 'layf_process_site_video_shortcodes' );
 	    add_filter('img_caption_shortcode', 'layf_filter_image_caption', 20, 3); //filter caption text
 	    add_filter( 'layf_turbo_content_feed', array( $GLOBALS['wp_embed'], 'autoembed' ), 8 ); //embed media to HTML
-	    
+
 	    add_filter( 'layf_turbo_content_feed', 'wptexturize'        );
 	    add_filter( 'layf_turbo_content_feed', 'convert_smilies'    );
 	    add_filter( 'layf_turbo_content_feed', 'convert_chars'      );
@@ -431,30 +431,30 @@ class La_Yandex_Feed_Core {
         add_filter( 'layf_turbo_content_feed', array( $GLOBALS['wp_embed'], 'run_shortcode' ), 8 ); //embed media to HTML
         add_filter( 'layf_turbo_content_feed', 'layf_strip_all_shortcodes' );
 	    add_filter( 'layf_turbo_content_feed', 'layf_process_site_video_tags', 12 );
-        
+
 	    $turbo_content = apply_filters('layf_turbo_content_feed', $content);
-	    
+
 	    if(!get_option('layf_allow_any_tags', false)) {
             $turbo_content = layf_strip_tags_content( $turbo_content, self::$yandex_strip_content_tags );
             $turbo_content = strip_tags( $turbo_content, self::$yandex_turbo_allowed_tags . self::$yandex_turbo_allowed_extra_tags );
         }
-	    
+
 	    $turbo_content = preg_replace('/<p>\s*<\/p>/', '', $turbo_content );
 	    $turbo_content = preg_replace('/class\s*=\s*".*?"/', '', $turbo_content );
 	    $turbo_content = preg_replace('/class\s*=\s*\'.*?\'/', '', $turbo_content );
 	    $turbo_content = preg_replace('/\s+>/', '>', $turbo_content );
-	    
+
 	    $turbo_content = self::wrap_turbo_images($turbo_content);
 	    $turbo_content = self::add_ads_blocks($turbo_content);
 	    $turbo_content = self::add_header_with_thumbnail($turbo_content);
-	    
+
 	    $turbo_content = layf_wxr_cdata( $turbo_content );
-	    
+
 	    return $turbo_content;
 	}
-	
+
 	static function wrap_turbo_images($turbo_content) {
-	    
+
 	    $post = layf_get_post();
 	    $thumb_id = get_post_thumbnail_id($post->ID);
 	    $thumb_url_no_suffix = '';
@@ -463,9 +463,9 @@ class La_Yandex_Feed_Core {
 	        $thumb_url = preg_replace('/http[s]?:/', '', $thumb_url);
 	        $thumb_url_no_suffix = preg_replace('/(?:-\d+x\d+)?(\.\w+)$/', '$1', $thumb_url);
 	    }
-	    
+
 	    preg_match_all('!(<img.*>)!Ui', $turbo_content, $matches);
-	     
+
 	    if(isset($matches[1]) && !empty($matches)){
 	        foreach($matches[1] as $k => $v) {
 	            if($thumb_url_no_suffix && strpos($v, $thumb_url_no_suffix) && $thumb_url != $thumb_url_no_suffix) {
@@ -477,40 +477,40 @@ class La_Yandex_Feed_Core {
 	            }
 	        }
 	    }
-	     
+
 	    return $turbo_content;
 	}
-	
+
 	static function add_ads_blocks($turbo_content) {
-	    
+
 	    $layf_adnetwork_id_header = trim(get_option('layf_adnetwork_id_header', ''));
 	    if($layf_adnetwork_id_header) {
 	        $turbo_content = '<figure data-turbo-ad-id="header_ad_place"></figure>'.$turbo_content;
 	    }
-	    
+
 	    $layf_adnetwork_id_footer = trim(get_option('layf_adnetwork_id_footer', ''));
 	    if($layf_adnetwork_id_footer) {
 	        $turbo_content = $turbo_content . '<figure data-turbo-ad-id="footer_ad_place"></figure>';
 	    }
-	    
+
 	    return $turbo_content;
 	}
-	
+
 	static function add_header_with_thumbnail($turbo_content) {
-		
+
 		$img_html = '';
-		
+
 		$post = layf_get_post();
-		
+
 		if(get_option('layf_include_post_thumbnail')) {
 	       $thumb_id = get_post_thumbnail_id($post->ID);
 		}
 		else {
 		    $thumb_id = NULL;
 		}
-	    
+
 	    if(!empty($thumb_id)) {
-	        
+
             $attachment = layf_get_post( $thumb_id );
 	        if($attachment) {
 	            $caption = $attachment->post_excerpt;
@@ -518,9 +518,9 @@ class La_Yandex_Feed_Core {
 	                $caption = $attachment->post_content;
 	            }
 	        }
-	        
+
 	        if($caption) {
-	            
+
 	            add_filter( 'layf_figure_caption_content_feed', 'wptexturize'        );
 	            add_filter( 'layf_figure_caption_content_feed', 'convert_smilies'    );
 	            add_filter( 'layf_figure_caption_content_feed', 'convert_chars'      );
@@ -528,59 +528,59 @@ class La_Yandex_Feed_Core {
 	            add_filter( 'layf_figure_caption_content_feed', 'shortcode_unautop'  );
 	            add_filter( 'layf_figure_caption_content_feed', 'do_shortcode'       );
                 add_filter( 'layf_figure_caption_content_feed', 'layf_strip_all_shortcodes'   );
-	            
+
                 $caption = apply_filters('layf_figure_caption_content_feed', $caption);
 	        }
-	        
+
 	        if( $caption ) {
 	            $caption = '<figcaption>'.$caption.'</figcaption>';
 	        }
-	        
-	        
+
+
 	        $img_html = '<figure><img src="'.wp_get_attachment_url($thumb_id).'" />'.$caption.'</figure>';
 	    }
-	    
+
 	    $header_html = '<header>'.$img_html.'<h1>'. get_the_title_rss() .'</h1></header>';
 	    $turbo_content = $header_html . $turbo_content;
-	     
+
 	    return $turbo_content;
 	}
-	
+
 	static function custom_the_excerpt_rss() {
-	    
+
 	    $excerpt = get_the_excerpt();
 	    $excerpt = wp_strip_all_tags( $excerpt );
-	    
+
 	    add_filter( 'layf_excerpt_feed', 'layf_strip_all_shortcodes' );
 	    add_filter( 'layf_excerpt_feed', 'layf_remove_more_tag', 1 );
-        
+
 	    $excerpt = apply_filters('layf_excerpt_feed', $excerpt);
         $excerpt = apply_filters('the_title_rss', $excerpt);
-        
+
 	    echo $excerpt;
 	}
-	
+
 	/* @to-do: add support for support video files */
-	static function item_enclosure(){ 
+	static function item_enclosure(){
 		global $post;
-		
+
 		$enclosure_from_content = $enclosure = $matches = $res = array();
-		
+
 		if(get_option('layf_include_post_thumbnail')) {
 		    $thumb_id = get_post_thumbnail_id($post->ID);
 		    if(!empty($thumb_id)){
 		        $enclosure[0] = wp_get_attachment_url($thumb_id);
 		    }
 		}
-		
+
 		$out = do_shortcode($post->post_content);
-		
+
 		//preg_match_all('!http://.+\.(?:jpe?g|png|gif)!Ui' , $out , $matches);
 		preg_match_all('!<img(.*)src(.*)=(.*)"(.*)"!U', $out, $matches);
-		
+
 		$site_domain = preg_replace('/http[s]?:\/\//', '', site_url());
 		$site_domain = preg_replace('/\/.*/', '', $site_domain);
-		
+
 		if(isset($matches[4]) && !empty($matches)){
 		    foreach($matches[4] as $k => $v) {
 		        if(preg_match('/^(http[s]?:)?\/\/.*/', $v)) {
@@ -594,32 +594,32 @@ class La_Yandex_Feed_Core {
 		    }
 		}
 		$enclosure = array_merge($enclosure, $enclosure_from_content);
-		
+
 		if(empty($enclosure))
 			return $enclosure;
-				
+
 		$enclosure = array_unique($enclosure);
 		foreach($enclosure as $i => $img){
 		    $enclosure[$i] = preg_replace('/-\d+x\d+(\.\w+)$/', '$1', $img);
 		}
 		$enclosure = array_unique($enclosure);
-		
+
 		foreach($enclosure as $i => $img){
-			
+
 			$mime = self::_get_mime($img);
 			if(!empty($mime)){
 				$res[] = array('url' => self::add_protocol($img), 'mime' => $mime);
 			}
 		}
-		
+
 		//var_dump($res);
 		return $res;
 	}
-	
+
 	static function _get_mime($img){
 		//@to-do make this poetic
 		$mime = '';
-		
+
 		if(false !== strpos($img,'.jpg') || false !== strpos($img,'.jpeg')){
 			$mime = 'image/jpeg';
 		}
@@ -629,10 +629,10 @@ class La_Yandex_Feed_Core {
 		elseif(false !== strpos($img, '.gif')){
 			$mime = 'image/gif';
 		}
-		
+
 		return $mime;
 	}
-	
+
 	public static function add_protocol( $url ) {
 	    $url = preg_replace( '/^(http:|https:)/', '', $url );
 	    $url = self::get_site_protocol() . $url;
@@ -644,7 +644,7 @@ class La_Yandex_Feed_Core {
 	    $port = apply_filters( 'tst_yandex_news_filter_site_protocol', $port );
         return $url . ":" . $port;
 	}
-    
+
 	public static function get_site_protocol() {
 	    $site_protocol = preg_replace( '/(.*?)\/\/.*/', '\1', site_url() );
 	    return $site_protocol ? $site_protocol : ( is_ssl() ? 'https' : 'http' );
@@ -663,77 +663,77 @@ class La_Yandex_Feed_Core {
         $host_id = self::add_port($protocol_domain);
         return apply_filters( 'tst_yandex_news_filter_host_id', $host_id );
     }
-	
+
 	/* videos */
 	static function item_media(){
 		global $post;
-		
+
 		$matches = $res = array();
 		$return = array();
-		
+
 		//include shorcodes and oembeds
         $out = $post->post_content;
 		$out = do_shortcode($out);
 		$out = $GLOBALS['wp_embed']->autoembed($out);
-        
+
         //youtube
         $content_list = array($post->post_content, $out);
         $youtube_videos = array();
         foreach($content_list as $youtube_out) {
             $youtube_regexp = "/(?:http(?:s)?:\/\/)?(?:www\.)?(?:youtu\.be\/|youtube\.com\/(?:(?:watch)?\?(?:.*&)?v(?:i)?=|(?:embed|v|vi|user)\/))([\w-]{10,12})/";
-            preg_match_all($youtube_regexp, $youtube_out, $matches);		
+            preg_match_all($youtube_regexp, $youtube_out, $matches);
             if(isset($matches[0]) && !empty($matches[0]))
                 $youtube_videos = array_merge($res, $matches[0]); //append links
         }
         $youtube_videos = array_unique($youtube_videos);
-			
+
 		//modify $youtube_videos to be able add thumbnails
 		if(!empty($youtube_videos)){ foreach($youtube_videos as $i => $url) {
 			$thumbnail_url = self::get_youtube_thumbnail_url($url);
 			$return[] = array('player' => $url, 'thumb' => $thumbnail_url);
 		}}
 		// youtube end
-		
+
 		$videos = get_attached_media( 'video', $post->ID );
 		foreach($videos as $video) {
 		    $return[] = array('content' => set_url_scheme($video->guid), 'type' => $video->post_mime_type);
 		}
-		
+
 		//@to_do: add another video providers
-		
+
 		return apply_filters('layf_video_embeds', $return, $post->ID);
 	}
-	
-	/* build related links block */	
+
+	/* build related links block */
 	static function item_related() {
 		global $post;
-		
+
 		$links = array();
 		$links_data_raw = get_post_meta($post->ID, 'layf_related_links', true);
 		if(empty($links_data_raw))
 			return $links;
-		
+
 		$links_data_raw = str_replace("\n\r", "\n", $links_data_raw);
 		$links_data_raw = explode("\n", $links_data_raw);
 		$links_data_raw = array_map('trim', $links_data_raw);
-		
+
 		if(!empty($links_data_raw)){ foreach($links_data_raw as $link_raw) {
 			$url = explode(' ', $link_raw);
 			$link = array();
 			if(isset($url[0]) && !empty($url[0])){
 				$link['url'] = $url[0];
 				$link['text'] = trim(str_replace($url[0], '', $link_raw));
-								
+
 				$links[] = $link;
 			}
 		}}
-		//var_dump($links);		
-		
+		//var_dump($links);
+
 		return $links;
 	}
-	
+
 	static function get_proper_category($post_id) {
-		$terms = get_option('layf_filter_terms', '');			
+		$terms = get_option('layf_filter_terms', '');
 		$filter_tax = '';
 		if(!empty($terms)){
 			$filter_tax = $tax = get_option('layf_filter_taxonomy', 'category');
@@ -746,7 +746,7 @@ class La_Yandex_Feed_Core {
         $terms_slug = get_option('layf_filter_terms_slug', '');
         if(!empty($terms_slug)){
             $tax = get_option('layf_filter_taxonomy', 'category');
-            
+
             if(!empty($terms_slug)) {
                 $terms_slug = explode(',', $terms_slug);
                 if(count($terms_slug)) {
@@ -757,7 +757,7 @@ class La_Yandex_Feed_Core {
 
 		$category_tax = apply_filters('layf_category_taxonomy', 'category', $post_id);
 		$category = wp_get_object_terms($post_id, $category_tax);
-		
+
 		$category_name = '';
 		if($filter_tax && $filter_tax == $category_tax && is_array($category) && !empty($terms)) {
 			foreach($category as $cat) {
@@ -767,7 +767,7 @@ class La_Yandex_Feed_Core {
 				}
 			}
 		}
-		
+
 		if(empty($category_name)) {
 			if(count($category) > 1 && $category[0]->slug == 'uncategorized')
 				$category = $category[1]->name;
@@ -781,7 +781,7 @@ class La_Yandex_Feed_Core {
 		$category = apply_filters('layf_category', $category, get_the_ID());
 		return $category;
 	}
-	
+
 	static function get_youtube_thumbnail_url($url) {
 		$ret = '';
 		if(preg_match('/youtube\.com/', $url) || preg_match('/youtu\.be/', $url)) {
@@ -805,7 +805,7 @@ class La_Yandex_Feed_Core {
 
 
 function layf_get_chars_table() {
-	
+
 $table = array(
     '&nbsp;'     => '&#160;',  # no-break space = non-breaking space, U+00A0 ISOnum
     '&iexcl;'    => '&#161;',  # inverted exclamation mark, U+00A1 ISOnum
@@ -1067,13 +1067,14 @@ return $table;
 
 
 function layf_filter_image_caption($out, $attr, $content) {
-		
-	return $content;			
+
+	return $content;
 }
 
 
 function layf_strip_all_shortcodes($text){
     $text = preg_replace("/\[[^\]]+\]/", '', $text);  #strip shortcode
+		$text = preg_replace("/\{\{[^\}]+\}\}/", '', $text);  #strip other shortcode
     return $text;
 }
 
@@ -1085,10 +1086,10 @@ function layf_get_post_thumbnail_img($post_id) {
     else {
         $thumb_url = site_url(); // dirty hack, that works in sandbox
     }
-    
+
     $thumb_url = preg_replace('/http[s]?:/', '', $thumb_url);
     $video_preview_img = "<img src=\"{$thumb_url}\" />";
-    
+
     return $video_preview_img;
 }
 
@@ -1100,19 +1101,19 @@ function layf_compose_video_figure($video_url, $video_preview_img, $video_mime_t
 }
 
 function layf_get_post_mime_type_by_guid($guid) {
-    global $wpdb;    
-    return $wpdb->get_var( $wpdb->prepare( "SELECT post_mime_type FROM $wpdb->posts WHERE guid=%s", $guid ) );            
+    global $wpdb;
+    return $wpdb->get_var( $wpdb->prepare( "SELECT post_mime_type FROM $wpdb->posts WHERE guid=%s", $guid ) );
 }
 
 function layf_process_site_video_shortcodes($turbo_content) {
-    
+
     preg_match_all('!(\[video.*mp4="(.*?)".*\]\[/video\])!Ui', $turbo_content, $matches);
-    
+
     if(isset($matches[2]) && !empty($matches)){
-        
+
         $post = layf_get_post();
         $video_preview_img = layf_get_post_thumbnail_img($post->ID);
-        
+
         foreach($matches[2] as $k => $v) {
             $shortcode = isset($matches[1][$k]) ? $matches[1][$k] : null;
             if($shortcode) {
@@ -1121,20 +1122,20 @@ function layf_process_site_video_shortcodes($turbo_content) {
             }
         }
     }
-    
+
     return $turbo_content;
 }
 
 function layf_is_in_tags($video_tag, $video_tags) {
     $tag_already_exist = false;
-    
+
     foreach($video_tags as $tag) {
         if(strpos($tag, $video_tag) !== false) {
             $tag_already_exist = true;
             break;
         }
     }
-    
+
     return $tag_already_exist;
 }
 
@@ -1152,7 +1153,7 @@ function layf_process_site_video_tags($turbo_content) {
     }
 
     $video_tags = array();
-    
+
     preg_match_all('!(<figure.*?>\s*<video[^>]*?\s+src="(.*?)">\s*?</video>.*?</figure>)!i', $turbo_content, $matches);
     if(isset($matches[2]) && !empty($matches)){
         foreach($matches[2] as $k => $v) {
@@ -1161,22 +1162,22 @@ function layf_process_site_video_tags($turbo_content) {
                 if(layf_is_in_tags($video_tag, $ok_video_tags)) {
                     continue;
                 }
-                
+
                 $video_tags[] = array('tag' => $video_tag, 'src' => $v);
             }
         }
     }
-        
+
     preg_match_all('!(<video[^>]*?\s+src="(.*?)">\s*?</video>)!i', $turbo_content, $matches);
     if(isset($matches[2]) && !empty($matches)){
         foreach($matches[2] as $k => $v) {
             $video_tag = isset($matches[1][$k]) ? $matches[1][$k] : null;
-            
+
             if($video_tag) {
                 if(layf_is_in_tags($video_tag, $ok_video_tags)) {
                     continue;
                 }
-                
+
                 $tag_already_exist = false;
                 foreach($video_tags as $v) {
                     if(strpos($v['tag'], $video_tag) !== false) {
@@ -1184,7 +1185,7 @@ function layf_process_site_video_tags($turbo_content) {
                         break;
                     }
                 }
-                
+
                 if(!$tag_already_exist) {
                     $video_tags[] = array('tag' => $video_tag, 'src' => $v);
                 }
@@ -1196,19 +1197,19 @@ function layf_process_site_video_tags($turbo_content) {
     if(isset($matches[2]) && !empty($matches)){
         foreach($matches[2] as $k => $v) {
             $video_tag = isset($matches[1][$k]) ? $matches[1][$k] : null;
-            
+
             if($video_tag) {
                 if(layf_is_in_tags($video_tag, $ok_video_tags)) {
-                    
+
                     if(@$_GET['debug'] && get_the_ID() == 104747) {
                         echo "\n\n\n=================================\n\n\n";
                         echo "skip in ok";
                     }
                     continue;
                 }
-            
+
                 $video_params = array('tag' => $video_tag, 'src' => $v);
-                
+
                 preg_match_all('!type="(video/.*?)"!i', $video_tag, $mime_type_matches);
                 if(isset($mime_type_matches[1]) && !empty($mime_type_matches[1])){
                     $video_params['mime_type'] = $mime_type_matches[1][0];
@@ -1218,14 +1219,14 @@ function layf_process_site_video_tags($turbo_content) {
                 if(isset($mime_type_matches[1]) && !empty($mime_type_matches[1])){
                     $video_params['preview_url'] = $mime_type_matches[1][0];
                 }
-                
+
                 $video_tags[] = $video_params;
             }
         }
     }
-    
+
     if(!empty($video_tags)) {
-        
+
         $post = layf_get_post();
         $preview_img = layf_get_post_thumbnail_img($post->ID);
 
@@ -1235,7 +1236,7 @@ function layf_process_site_video_tags($turbo_content) {
             $turbo_content = str_replace($v['tag'], layf_compose_video_figure($v['src'], $video_preview_img, $mime_type), $turbo_content);
         }
     }
-    
+
     return $turbo_content;
 }
 
@@ -1257,24 +1258,24 @@ function layf_wxr_cdata( $str ) {
 }
 
 function layf_get_post($post_id = null) {
-    
+
     if(!La_Yandex_Feed_Core::$get_post_cache) {
         La_Yandex_Feed_Core::$get_post_cache = array();
     }
-    
+
     if(!$post_id) {
         $post_id = get_the_ID();
     }
-    
+
     if($post_id && !isset(La_Yandex_Feed_Core::$get_post_cache[$post_id])) {
         # clean cache array to save memory
         if(count(La_Yandex_Feed_Core::$get_post_cache) > La_Yandex_Feed_Core::$get_post_cache_max_length) {
             La_Yandex_Feed_Core::$get_post_cache = array();
         }
-        
+
         La_Yandex_Feed_Core::$get_post_cache[$post_id] = get_post($post_id);
     }
-    
+
     return $post_id ? La_Yandex_Feed_Core::$get_post_cache[$post_id] : null;
 }
 
@@ -1292,7 +1293,7 @@ function layf_strip_tags_content($text, $tags = '') {
 
   preg_match_all('/<(.+?)[\s]*\/?[\s]*>/si', trim($tags), $tags);
   $tags = array_unique($tags[1]);
-   
+
   if(is_array($tags) && count($tags) > 0) {
     $text = preg_replace('@<('. implode('|', $tags) .')\b.*?>.*?</\1>@si', '', $text);
   }
@@ -1310,14 +1311,14 @@ class TstYandexNewsAPIClient {
     }
 
     public static function get_instance(){
-        
+
         if (NULL === self :: $instance) {
             self :: $instance = new self;
         }
 
         return self :: $instance;
     }
-    
+
     public function update_current_post_in_yandex() {
         if(!$this->auth_token) {
             return;
@@ -1346,14 +1347,14 @@ class TstYandexNewsAPIClient {
 
         $ch = curl_init($yandex_post_turbo_feed_url);
         curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $feed_content ); 
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $feed_content );
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         $result = curl_exec($ch);
         curl_close($ch);
-        
+
         // error_log("api result:" . print_r($result, true));
 
         try {
@@ -1399,7 +1400,7 @@ class TstYandexNewsAPIClient {
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         $result = curl_exec($ch);
         curl_close($ch);
-        
+
         // error_log("get_user_id_from_yandex api result:" . print_r($result, true));
 
         try {
@@ -1417,7 +1418,7 @@ class TstYandexNewsAPIClient {
                 throw new TstYandexNewsInvalidAuthTokenException();
             }
             else {
-                throw new Exception($result_data->error_code);                
+                throw new Exception($result_data->error_code);
             }
         }
         elseif(!$result_data || !$result_data->user_id) {
@@ -1446,7 +1447,7 @@ class TstYandexNewsAPIClient {
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         $result = curl_exec($ch);
         curl_close($ch);
-        
+
         // error_log("api result:" . print_r($result, true));
 
         try {
@@ -1470,7 +1471,7 @@ class TstYandexNewsAPIClient {
                 throw new TstYandexNewsResourceNotFoundException();
             }
             else {
-                throw new Exception($result_data->error_code);                
+                throw new Exception($result_data->error_code);
             }
         }
         elseif(!$result_data || !$result_data->upload_address) {
@@ -1494,7 +1495,7 @@ class TstYandexNewsResourceNotFoundException extends Exception {
 // shortcodes
 class TstYandexNewsShortcodes {
     public static $list = array(
-        'TstYandexNewsComponent', 'TstYandexNewsButton', 'TstYandexNewsSearch', 'TstYandexNewsShare', 'TstYandexNewsFeedback', 'TstYandexNewsAds', 
+        'TstYandexNewsComponent', 'TstYandexNewsButton', 'TstYandexNewsSearch', 'TstYandexNewsShare', 'TstYandexNewsFeedback', 'TstYandexNewsAds',
     );
 
     public static function shortcode_component($atts, $content) {
@@ -1506,7 +1507,7 @@ class TstYandexNewsShortcodes {
             return '';
         }
 
-        $other_a_pairs = self::get_other_a_pairs($a);        
+        $other_a_pairs = self::get_other_a_pairs($a);
         La_Yandex_Feed_Core::add_allowed_tag($a['tag']);
 
         return self::get_tag_str($a['tag'], $content, $other_a_pairs);
